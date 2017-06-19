@@ -1,0 +1,6 @@
+.idea/
+2017_06_09=morphology_data=two_temperature_four_plates.csv
+.nextflow.log*
+.nextflow/
+results/
+data/2017*.csv
