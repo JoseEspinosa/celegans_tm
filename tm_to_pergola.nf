@@ -63,6 +63,7 @@ rec_worm_20 = rec_file_2
     }
     .filter { row ->
         row[0] != "0"
+        row[0] = 100 + row[0].toInteger()
     }
     .filter { row ->
         row[1].split(",")[84] == "20"
@@ -97,7 +98,6 @@ process records_to_pergola_bed {
   	"""
   	# -e because time is used to establish the age of the worm
   	pergola -i $file_worm -m $mapping_file -fs , -n -e -nt
-
   	"""
 }
 
@@ -136,7 +136,8 @@ bedGr_recordings
     .map {
         def file = it[0]
         def group = it[1]
-        f.append(file.name.split("\\.")[0] + "\t" + group + "\n")
+        //f.append(file.name.split("\\.")[0] + "\t" + group + "\n")
+        f << file.name.split("\\.")[0] + "\t" + group + "\n"
     }
 
 
