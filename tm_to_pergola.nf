@@ -118,9 +118,10 @@ process records_to_pergola_bedGraph {
   	script:
 
   	"""
+  	awk -F , '!seen[$3]++' $file_worm > ${file_worm}".mod"
   	# -e because time is used to establish the age of the worm
-  	pergola -i $file_worm -m $mapping_file -f bedGraph -w 86400 -fs , -n -e -max 2997901
-  	# pergola -i $file_worm -m $mapping_file -f bedGraph -fs , -n -e
+  	pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -w 86400 -fs , -n -e -max 2997901
+  	# pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -fs , -n -e
   	"""
 }
 // me esta metiendo el 20 en el archivo!!!!
