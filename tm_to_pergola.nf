@@ -18,8 +18,10 @@ log.info "output                   : ${params.output}"
 log.info "\n"
 
 /*
-nextflow run tm_to_pergola.nf --recordings 'data/small_track.csv' --mappings 'data/tm2pergola.txt' \
-	-with-docker -resume
+nextflow run tm_to_pergola.nf --recordings 'data/small_track.csv' \
+        --mappings 'data/tm2pergola.txt' \
+	    -with-docker -resumeola.txt' \
+	    -with-docker -resume
 */
 
 /*
@@ -35,12 +37,42 @@ if( !mapping_file.exists() ) exit 1, "Missing mapping file: ${mapping_file}"
 
 /*
  * Create a channel for strain 2 worm trackings
-// I don't have all the worms ids for this reason i only take the ones that have
-// an id by the moment to create a first visualization
 */
+// Worms with ID are in the stationary phase, before they can not be individually tracked
+// First approach visualize this guys
+rec_file.into { rec_file_1; rec_file_2; rec_file_min_max }
 
-rec_file.into { rec_file_1; rec_file_2 }
+/*
+ * Getting min and time capture in file
+ */
+process min_max_capture_time {
+    input:
+    file (file_worm) from rec_file_min_max
 
+    output:
+    stdout into min_max_t
+
+    exec:
+    println "File processed $file_worm"
+
+    script:
+
+    """
+    min_max_capture_t=`awk -F , 'NR == 2 {min = \$2; max = \$2}
+    NR > 2 && \$2 < min {min = \$2}
+    NR > 2 && \$2 > max {max = \$2}
+    END{print min","max}' ${file_worm}`
+
+    printf "\$min_max_capture_t"
+    """
+}
+
+min_max_t.into { min_max_time; min_max_time_b; min_max_time_bg }
+min_max_time.println()
+
+/*
+ * Worms culture at 27 degrees
+*/
 rec_worm_27 = rec_file_1
     .splitCsv (header: true) { row ->
         [ row['Stationary Worm ID'], row.values().join(',') ] //, row.keySet().join(',')
@@ -57,6 +89,9 @@ rec_worm_27 = rec_file_1
     .map { [ it, "high_T" ]}
     //.println()
 
+/*
+ * Worms culture at 20 degrees
+*/
 rec_worm_20 = rec_file_2
     .splitCsv (header: true) { row ->
         [ row['Stationary Worm ID'], row.values().join(',') ] //, row.keySet().join(',')
@@ -89,16 +124,16 @@ process records_to_pergola_bed {
     set file (file_worm), val (temp) from rec_worm_bed
     file mapping_file
 
-  	output:
-  	set file ('*.bed'), val (temp) into bed_recordings
-    //stdout test_ch
+    output:
+    set file ('tr_*.bed'), val (temp) into bed_recordings
 
-  	script:
+    script:
 
-  	"""
-  	# -e because time is used to establish the age of the worm
-  	pergola -i $file_worm -m $mapping_file -fs , -n -e -nt
-  	"""
+    """
+    # -e because time is used to establish the age of the worm
+    pergola -i ${file_worm} -m ${mapping_file} -fs , -n -e -nt
+    #printf "\$min_capture_t"
+    """
 }
 
 /*
@@ -109,21 +144,25 @@ process records_to_pergola_bedGraph {
     input:
     set file (file_worm), val (temp) from rec_worm_bedGr
     file mapping_file
+    val min_max_t from min_max_time_b.first()
 
   	output:
-  	set file ('*.bedGraph'), val (temp) into bedGr_recordings
+  	set file ('tr_*.bedGraph'), val (temp) into bedGr_recordings
   	//set file ('file_worm'), val (name_file_worm), val (exp_group) from mat_file
     //stdout test_ch
 
   	script:
 
   	"""
-  	awk -F , '!seen[$3]++' $file_worm > ${file_worm}".mod"
-  	# -e because time is used to establish the age of the worm
-  	pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -w 86400 -fs , -n -e -max 2997901
+  	min=\$(echo ${min_max_t} | cut -f1 -d ',')
+  	max=\$(echo ${min_max_t} | cut -f2 -d ',')
+  	awk -F , '!seen[\$3]++' $file_worm > ${file_worm}".mod"
+ 	# -e because time is used to establish the age of the worm
+  	pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -w 86400 -fs , -n -e -min \${min} -max \$max -nt
   	# pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -fs , -n -e
   	"""
 }
+
 // me esta metiendo el 20 en el archivo!!!!
 /*
  * Generating a file with the groups assignments for Pergola shiny
