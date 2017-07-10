@@ -20,7 +20,6 @@ log.info "\n"
 /*
 nextflow run tm_to_pergola.nf --recordings 'data/small_track.csv' \
         --mappings 'data/tm2pergola.txt' \
-	    -with-docker -resumeola.txt' \
 	    -with-docker -resume
 */
 
@@ -50,7 +49,7 @@ process min_max_capture_time {
     file (file_worm) from rec_file_min_max
 
     output:
-    stdout into min_max_t
+    stdout into min_max_time
 
     exec:
     println "File processed $file_worm"
@@ -67,8 +66,8 @@ process min_max_capture_time {
     """
 }
 
-min_max_t.into { min_max_time; min_max_time_b; min_max_time_bg }
-min_max_time.println()
+min_max_time.into { min_max_time_b; min_max_time_bg; min_max_time_pr }
+min_max_time_pr.println()
 
 /*
  * Worms culture at 27 degrees
@@ -123,6 +122,7 @@ process records_to_pergola_bed {
     input:
     set file (file_worm), val (temp) from rec_worm_bed
     file mapping_file
+    val min_max_t from min_max_time_b.first()
 
     output:
     set file ('tr_*.bed'), val (temp) into bed_recordings
@@ -130,9 +130,10 @@ process records_to_pergola_bed {
     script:
 
     """
+    min=\$(echo ${min_max_t} | cut -f1 -d ',')
+  	max=\$(echo ${min_max_t} | cut -f2 -d ',')
     # -e because time is used to establish the age of the worm
-    pergola -i ${file_worm} -m ${mapping_file} -fs , -n -e -nt
-    #printf "\$min_capture_t"
+    pergola -i ${file_worm} -m ${mapping_file} -fs , -n -e -min \${min} -max \${max} -nt
     """
 }
 
@@ -144,7 +145,7 @@ process records_to_pergola_bedGraph {
     input:
     set file (file_worm), val (temp) from rec_worm_bedGr
     file mapping_file
-    val min_max_t from min_max_time_b.first()
+    val min_max_t from min_max_time_bg.first()
 
   	output:
   	set file ('tr_*.bedGraph'), val (temp) into bedGr_recordings
@@ -158,7 +159,7 @@ process records_to_pergola_bedGraph {
   	max=\$(echo ${min_max_t} | cut -f2 -d ',')
   	awk -F , '!seen[\$3]++' $file_worm > ${file_worm}".mod"
  	# -e because time is used to establish the age of the worm
-  	pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -w 86400 -fs , -n -e -min \${min} -max \$max -nt
+  	pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -w 86400 -fs , -n -e -min \${min} -max \${max} -nt
   	# pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -fs , -n -e
   	"""
 }
@@ -180,7 +181,3 @@ bedGr_recordings
         f << file.name.split("\\.")[0] + "\t" + group + "\n"
     }
 
-
-//subscribe().getClass()
-//bedGr_recordings.split("\\.")[1].println()
-//def pheno_feature =  it.name.split("\\.")[1]
