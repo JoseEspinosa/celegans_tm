@@ -42,7 +42,7 @@ if( !mapping_file.exists() ) exit 1, "Missing mapping file: ${mapping_file}"
 rec_file.into { rec_file_1; rec_file_2; rec_file_min_max }
 
 /*
- * Getting min and time capture in file
+ * Getting min and time capture in file before filtering no stationary worms
  */
 process min_max_capture_time {
     input:
@@ -132,8 +132,15 @@ process records_to_pergola_bed {
     """
     min=\$(echo ${min_max_t} | cut -f1 -d ',')
   	max=\$(echo ${min_max_t} | cut -f2 -d ',')
+
+  	cat ${file_worm} > ${file_worm}".temp"
+  	cat ${file_worm} | tail -n 1 | awk -F , -v min="\${min}" 'BEGIN {OFS = FS} \$3 = min' | awk -F , 'BEGIN {OFS = FS} \$13 = 0.001' >> ${file_worm}".temp"
+
+    max_rel=\$((max - min))
+
     # -e because time is used to establish the age of the worm
-    pergola -i ${file_worm} -m ${mapping_file} -fs , -n -e -min \${min} -max \${max} -nt
+    # pergola -i ${file_worm} -m ${mapping_file} -fs , -n -e -min \${min} -max \${max} -nt
+    pergola -i ${file_worm} -m ${mapping_file} -fs , -n -e -min 0 -max \${max_rel} -nt
     """
 }
 
@@ -157,10 +164,18 @@ process records_to_pergola_bedGraph {
   	"""
   	min=\$(echo ${min_max_t} | cut -f1 -d ',')
   	max=\$(echo ${min_max_t} | cut -f2 -d ',')
-  	awk -F , '!seen[\$3]++' $file_worm > ${file_worm}".mod"
- 	# -e because time is used to establish the age of the worm
-  	pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -w 86400 -fs , -n -e -min \${min} -max \${max} -nt
-  	# pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -fs , -n -e
+
+  	cat ${file_worm} > ${file_worm}".temp"
+  	cat ${file_worm} | tail -n 1 | awk -F , -v min="\${min}" 'BEGIN {OFS = FS} \$3 = min' | awk -F , 'BEGIN {OFS = FS} \$13 = 0.001' >> ${file_worm}".temp"
+
+    ## Remove duplicated time points
+  	awk -F , '!seen[\$3]++' ${file_worm}.temp > ${file_worm}".mod"
+
+    max_rel=\$((max - min))
+
+    # pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -w 86400 -fs , -n -e -min \${min} -max \${max} -nt
+    pergola -i ${file_worm}".mod" -m $mapping_file -f bedGraph -w 86400 -fs , -n -e -min 0 -max \${max_rel} -nt
+  	# touch tr_culo.bedGraph
   	"""
 }
 
